@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Container, TextField, Button, Typography, Paper, List, CircularProgress, Box, AppBar, Toolbar } from '@mui/material';
+import { Container, TextField, Button, Stack, Typography, Paper, List, CircularProgress, Box, AppBar, Toolbar } from '@mui/material';
 import { styled } from '@mui/system';
 
 interface HistoryItem {
@@ -29,11 +29,14 @@ const FixedAppBar = styled(AppBar)({
   zIndex: 1100,
 });
 
+
 export default function Home() {
   const [question, setQuestion] = useState<string>('');
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [answer, setAnswer] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [adUrl, setAdUrl] = useState<string>('');
+  const [adMessage, setAdMessage] = useState<string>('');
 
   const scrollToBottom = () => {
     window.scrollTo({
@@ -44,13 +47,24 @@ export default function Home() {
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    setLoading(true);
 
+    const ad_response = await axios.post("http://localhost:8080/api/ad", { question, history })
+
+    if (ad_response.data) {
+      setAdUrl(ad_response.data.img_url)
+      setAdMessage(ad_response.data.message)
+    } else {
+      setAdUrl('') // Could set a default ad as fallback here
+      setAdMessage('')
+    }
+
+    console.log("Response", ad_response)
+    setLoading(true);
     scrollToBottom();
 
+    let start_time = new Date().getTime()
     try {
       const response = await axios.post('/api/ask', { question, history });
-
       setHistory([...history, { role: 'user', content: question }, { role: 'assistant', content: response.data.answer }]);
       setAnswer(response.data.answer);
       setQuestion('');
@@ -58,6 +72,11 @@ export default function Home() {
       console.error('Error fetching the answer:', error);
     } finally {
       setLoading(false);
+    }
+
+    let end_time = new Date().getTime()
+    if (ad_response.data) {
+      axios.post("http://localhost:8080/api/record", { adId: ad_response.data.uid, durationViewed: (end_time - start_time) })
     }
   };
 
@@ -115,12 +134,27 @@ export default function Home() {
             </StyledButton>
           </form>
         </StyledPaper>
-        {loading && (
-          <Box display="flex" justifyContent="center" alignItems="center" mt={2}>
-            <CircularProgress />
-          </Box>
-        )}
-      </Container>
+        {loading && ((adUrl !== "" && (
+          <Stack>
+            <Box display="flex" justifyContent="center" alignItems="center" sx={{ mt: 1 }}>
+              <img
+                src={adUrl}
+                loading="lazy"
+                width="600pt"
+              />
+            </Box>
+            <h2>
+              {adMessage}
+            </h2>
+
+          </Stack >
+        )) || (
+            <Box display="flex" justifyContent="center" alignItems="center" mt={2}>
+              <CircularProgress />
+            </Box>
+          ))
+        }
+      </Container >
     </>
   );
 }
